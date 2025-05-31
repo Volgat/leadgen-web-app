@@ -5,7 +5,12 @@ export const metadata = {
   description: 'AI-powered lead generation with intent signals from 9 data sources. Automated business intelligence for smarter B2B growth.',
   keywords: 'business intelligence, lead generation, AI, data analysis, B2B, crunchbase, intent signals',
   author: 'Silver Birch Growth Inc.',
-  viewport: 'width=device-width, initial-scale=1',
+}
+
+// Configuration viewport séparée pour Next.js 15
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
 }
 
 export default function RootLayout({ children }) {
@@ -13,7 +18,6 @@ export default function RootLayout({ children }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className="antialiased bg-gray-50">
