@@ -89,6 +89,3 @@ export async function GET(request) {
     }, { status: 500 });
   }
 }
-
-// Export du cache pour utilisation dans d'autres modules
-export { zapierCache };

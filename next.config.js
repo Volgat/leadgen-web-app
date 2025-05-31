@@ -1,9 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Configuration optimisée pour Vercel
-  experimental: {
-    serverComponentsExternalPackages: ['cheerio', 'axios']
-  },
+  // Configuration corrigée pour Next.js 15.3.3
+  serverExternalPackages: ['cheerio', 'axios'],
   
   // Optimisations Webpack pour le déploiement
   webpack: (config, { isServer, dev }) => {
@@ -34,13 +32,15 @@ const nextConfig = {
     unoptimized: true
   },
   
-  // Configuration stricte pour éviter les erreurs de build
-  typescript: {
-    ignoreBuildErrors: false,
+  // Configuration ESLint corrigée
+  eslint: {
+    dirs: ['app', 'lib', 'components'],
+    ignoreDuringBuilds: false,
   },
   
-  eslint: {
-    ignoreDuringBuilds: false,
+  // Configuration TypeScript
+  typescript: {
+    ignoreBuildErrors: false,
   },
   
   // Optimisations de performance
