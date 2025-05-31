@@ -1,34 +1,78 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Configuration mise à jour pour Next.js 15.3.3
-  serverExternalPackages: ['cheerio', 'axios'],
-  
-  // Configuration Turbopack (nouveau bundler de Next.js 15)
+  // Configuration optimisée pour Vercel
   experimental: {
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
-      },
-    },
+    serverComponentsExternalPackages: ['cheerio', 'axios']
   },
   
-  // Optimisations pour le scraping
-  webpack: (config, { isServer }) => {
+  // Optimisations Webpack pour le déploiement
+  webpack: (config, { isServer, dev }) => {
     if (isServer) {
-      // Exclure cheerio du bundle client
-      config.externals = [...config.externals, 'cheerio'];
+      // Externaliser les modules problématiques côté serveur
+      config.externals = [...(config.externals || []), 'cheerio', 'canvas', 'jsdom'];
     }
+    
+    // Optimisations pour la production
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        sideEffects: false,
+      };
+    }
+    
     return config;
   },
   
-  // Optimisation des images
+  // Configuration des images
   images: {
-    domains: ['example.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
     unoptimized: true
-  }
+  },
+  
+  // Configuration stricte pour éviter les erreurs de build
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
+  
+  // Optimisations de performance
+  compress: true,
+  
+  // Configuration des redirections si nécessaire
+  async redirects() {
+    return [];
+  },
+  
+  // Configuration des en-têtes de sécurité
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin',
+          },
+        ],
+      },
+    ];
+  },
 }
 
 module.exports = nextConfig

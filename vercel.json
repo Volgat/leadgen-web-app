@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "functions": {
+    "app/api/search/route.js": {
+      "maxDuration": 60
+    },
+    "app/api/leads/route.js": {
+      "maxDuration": 30
+    },
+    "app/api/zapier-webhook/route.js": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "regions": ["iad1"],
+  "framework": "nextjs"
+}
