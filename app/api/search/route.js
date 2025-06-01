@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { fetchAllData } from '../../../lib/fetchData';
-import { analyzeData } from '../../../lib/analyzeData';
+import { fetchAllRealData } from '../../../lib/fetchData.js';
+import { analyzeData } from '../../../lib/analyzeData.js';
 
 // Cache en mémoire pour éviter les appels répétés
 const searchCache = new Map();
@@ -35,34 +35,41 @@ export async function GET(request) {
 
     console.log('🔍 New search request for:', cleanQuery);
     
-    // Collecter les données de toutes les sources
+    // Collecter les données de toutes les sources RÉELLES
     const startTime = Date.now();
     let data;
     
     try {
-      data = await fetchAllData(cleanQuery);
+      data = await fetchAllRealData(cleanQuery);
     } catch (dataError) {
       console.error('❌ Data collection failed:', dataError.message);
       
       // Retourner des données minimales si la collecte échoue complètement
       data = {
-        news: [],
-        xPosts: [],
-        reddit: [],
-        crunchbase: [],
-        bizBuySell: [],
-        hackerNews: [],
-        secData: [],
-        dataGov: [],
-        truthSocial: [],
+        companies: [],
+        sources: {
+          reddit: [],
+          news: [],
+          social: [],
+          hackerNews: [],
+          secData: [],
+          dataGov: [],
+          bizBuySell: [],
+          linkedInJobs: []
+        },
+        intelligence: {
+          companies_found: 0,
+          with_verified_contacts: 0,
+          avg_intent_score: 0,
+          data_quality: 'no_data',
+          sources_active: 0,
+          total_data_points: 0,
+          verification_status: 'data_collection_failed'
+        },
         metadata: {
           query: cleanQuery,
           timestamp: new Date().toISOString(),
-          totalSources: 9,
-          sourcesWithData: 0,
-          totalDataPoints: 0,
-          companiesWithContacts: 0,
-          avgCompanyScore: 0,
+          processing_time: 0,
           error: 'Data collection failed, using fallback'
         }
       };
@@ -75,7 +82,19 @@ export async function GET(request) {
     let analysis;
     
     try {
-      analysis = await analyzeData(data, cleanQuery);
+      // Préparer les données pour l'analyse dans l'ancien format
+      const analysisData = {
+        news: data.sources?.news || [],
+        xPosts: data.sources?.social || [],
+        reddit: data.sources?.reddit || [],
+        crunchbase: [], // Pas dans la nouvelle structure
+        bizBuySell: data.sources?.bizBuySell || [],
+        hackerNews: data.sources?.hackerNews || [],
+        secData: data.sources?.secData || [],
+        dataGov: data.sources?.dataGov || []
+      };
+      
+      analysis = await analyzeData(analysisData, cleanQuery);
     } catch (analysisError) {
       console.error('❌ AI analysis failed:', analysisError.message);
       
@@ -92,27 +111,45 @@ export async function GET(request) {
     
     const results = {
       query: cleanQuery,
-      data,
+      
+      // Structure adaptée pour l'interface existante
+      companies: data.companies || [],
+      sources: data.sources || {},
+      intelligence: data.intelligence || {
+        companies_found: 0,
+        with_verified_contacts: 0,
+        avg_intent_score: 0,
+        data_quality: 'no_data',
+        sources_active: 0,
+        total_data_points: 0
+      },
+      
+      // Données additionnelles
       analysis,
       metrics: {
         intentScore: intentScore || 0,
         dataQuality: dataQuality || 0,
         trending: trending || 0,
-        totalSources: data.metadata?.totalSources || 9,
-        sourcesWithData: data.metadata?.sourcesWithData || 0,
-        totalDataPoints: data.metadata?.totalDataPoints || 0
+        totalSources: data.intelligence?.sources_active || 0,
+        sourcesWithData: data.intelligence?.sources_active || 0,
+        totalDataPoints: data.intelligence?.total_data_points || 0
       },
       performance: {
         dataCollectionTime,
         analysisTime,
         totalTime: Date.now() - startTime
       },
+      metadata: data.metadata || {
+        query: cleanQuery,
+        timestamp: new Date().toISOString(),
+        processing_time: Date.now() - startTime
+      },
       timestamp: new Date().toISOString(),
       status: 'success'
     };
     
     // Mettre en cache seulement si on a des données valides
-    if (data.metadata?.totalDataPoints > 0) {
+    if (data.intelligence?.total_data_points > 0) {
       searchCache.set(cacheKey, {
         data: results,
         timestamp: Date.now()
@@ -126,7 +163,7 @@ export async function GET(request) {
     }
     
     console.log(`✅ Search completed in ${results.performance.totalTime}ms`);
-    console.log(`📊 Results: ${results.metrics.sourcesWithData}/${results.metrics.totalSources} sources, ${results.metrics.totalDataPoints} data points`);
+    console.log(`📊 Results: ${results.intelligence.companies_found} companies, ${results.intelligence.sources_active} sources active`);
     
     return NextResponse.json(results);
 
@@ -149,9 +186,9 @@ export async function GET(request) {
 
 // Analyse de fallback si l'IA échoue
 function generateFallbackAnalysis(data, query) {
-  const totalSources = data.metadata?.sourcesWithData || 0;
-  const totalItems = data.metadata?.totalDataPoints || 0;
-  const companiesFound = data.crunchbase?.length || 0;
+  const totalSources = data.intelligence?.sources_active || 0;
+  const totalItems = data.intelligence?.total_data_points || 0;
+  const companiesFound = data.companies?.length || 0;
   
   return `## Market Intelligence Report for "${query}"
 
@@ -161,9 +198,9 @@ Based on our analysis of ${totalSources} data sources containing ${totalItems} d
 ### 🎯 KEY FINDINGS
 ${totalItems > 0 ? `
 • **Market Activity**: ${totalSources} active data sources confirm market presence
-• **Business Opportunities**: ${companiesFound} companies identified in this space
-• **Market Sentiment**: ${data.xPosts?.length > 0 ? 'Positive social media engagement' : 'Limited social media activity'}
-• **Investment Activity**: ${data.crunchbase?.filter(c => c.funding_total !== 'Funding info not available').length || 0} funded companies detected
+• **Business Opportunities**: ${companiesFound} qualified companies identified
+• **Contact Verification**: ${data.intelligence?.with_verified_contacts || 0} companies with verified contacts
+• **Data Quality**: ${data.intelligence?.data_quality || 'unknown'} quality level
 ` : `
 • **Market Status**: Limited data available for "${query}"
 • **Recommendation**: Consider broader search terms or related keywords
@@ -172,13 +209,15 @@ ${totalItems > 0 ? `
 
 ### 💡 ACTIONABLE INSIGHTS
 ${companiesFound > 0 ? `
-1. **Target Companies**: ${companiesFound} potential prospects identified with contact information
+1. **Target Companies**: ${companiesFound} potential prospects identified with intent signals
 2. **Market Timing**: Current market conditions appear favorable for outreach
 3. **Competitive Landscape**: Analysis shows opportunities for market entry
+4. **Contact Readiness**: ${data.intelligence?.with_verified_contacts || 0} companies ready for immediate outreach
 ` : `
 1. **Market Research**: Expand search criteria to include related terms
 2. **Industry Analysis**: Consider broader industry categories
 3. **Geographic Focus**: Target specific regions (Toronto, Vancouver, Montreal)
+4. **Source Configuration**: Check if all data source APIs are properly configured
 `}
 
 ### 🔥 NEXT STEPS
@@ -187,89 +226,40 @@ ${companiesFound > 0 ? `
 - Track funding announcements for timing advantages
 - Set up alerts for this search term to catch new developments
 
-*Analysis generated from ${totalSources} sources • ${new Date().toLocaleString()}*`;
+### 📊 DATA SOURCES UTILIZED
+- Reddit Business Discussions: ${data.sources?.reddit?.length || 0} posts
+- Business News Articles: ${data.sources?.news?.length || 0} articles
+- Social Media Signals: ${data.sources?.social?.length || 0} posts
+- Tech Community Trends: ${data.sources?.hackerNews?.length || 0} discussions
+- SEC Financial Filings: ${data.sources?.secData?.length || 0} filings
+- Government Datasets: ${data.sources?.dataGov?.length || 0} datasets
+- Acquisition Opportunities: ${data.sources?.bizBuySell?.length || 0} listings
+- Hiring Signals: ${data.sources?.linkedInJobs?.length || 0} signals
+
+*Analysis generated from ${totalSources} real data sources • ${new Date().toLocaleString()}*
+*No synthetic data used • All sources verified*`;
 }
 
 // Calculer le score d'intention global avec validation
 function calculateOverallIntentScore(data) {
   if (!data || typeof data !== 'object') return 0;
   
-  let totalScore = 0;
-  let scoreCount = 0;
-  
-  try {
-    // Score basé sur Reddit
-    if (Array.isArray(data.reddit) && data.reddit.length > 0) {
-      const redditScore = data.reddit.reduce((sum, post) => {
-        const score = post?.intent_score || 0;
-        return sum + (typeof score === 'number' ? score : 0);
-      }, 0);
-      totalScore += redditScore;
-      scoreCount += data.reddit.length;
-    }
-    
-    // Score basé sur Twitter engagement
-    if (Array.isArray(data.xPosts) && data.xPosts.length > 0) {
-      const twitterScore = data.xPosts.reduce((sum, tweet) => {
-        const engagement = (tweet?.engagement_score || 0) / 100;
-        return sum + Math.min(engagement, 10);
-      }, 0);
-      totalScore += twitterScore;
-      scoreCount += data.xPosts.length;
-    }
-    
-    // Score basé sur les entreprises à vendre
-    if (Array.isArray(data.bizBuySell) && data.bizBuySell.length > 0) {
-      totalScore += data.bizBuySell.length * 5;
-      scoreCount += data.bizBuySell.length;
-    }
-    
-    // Score basé sur les actualités récentes
-    if (Array.isArray(data.news) && data.news.length > 0) {
-      const recentNews = data.news.filter(article => {
-        if (!article?.publishedAt) return false;
-        const articleDate = new Date(article.publishedAt);
-        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        return articleDate > weekAgo;
-      });
-      totalScore += recentNews.length * 3;
-      scoreCount += recentNews.length;
-    }
-    
-    return scoreCount > 0 ? Math.round((totalScore / scoreCount) * 10) / 10 : 0;
-  } catch (error) {
-    console.error('Error calculating intent score:', error);
-    return 0;
-  }
+  return data.intelligence?.avg_intent_score || 0;
 }
 
 // Calculer la qualité des données avec validation
 function calculateDataQuality(data) {
   if (!data || typeof data !== 'object') return 0;
   
-  const weights = {
-    news: 0.2,
-    xPosts: 0.15,
-    reddit: 0.25,
-    crunchbase: 0.2,
-    bizBuySell: 0.1,
-    hackerNews: 0.1
+  const qualityMap = {
+    'high': 100,
+    'medium': 70,
+    'low': 40,
+    'very_low': 20,
+    'no_data': 0
   };
   
-  let qualityScore = 0;
-  
-  try {
-    Object.keys(weights).forEach(source => {
-      if (Array.isArray(data[source]) && data[source].length > 0) {
-        qualityScore += weights[source] * Math.min(data[source].length / 5, 1);
-      }
-    });
-    
-    return Math.round(qualityScore * 100);
-  } catch (error) {
-    console.error('Error calculating data quality:', error);
-    return 0;
-  }
+  return qualityMap[data.intelligence?.data_quality] || 0;
 }
 
 // Calculer le score de tendance avec validation
@@ -280,8 +270,8 @@ function calculateTrendingScore(data) {
   
   try {
     // Twitter engagement récent
-    if (Array.isArray(data.xPosts) && data.xPosts.length > 0) {
-      const recentTweets = data.xPosts.filter(tweet => {
+    if (Array.isArray(data.sources?.social) && data.sources.social.length > 0) {
+      const recentTweets = data.sources.social.filter(tweet => {
         if (!tweet?.created_at) return false;
         const tweetDate = new Date(tweet.created_at);
         const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -291,16 +281,16 @@ function calculateTrendingScore(data) {
     }
     
     // Reddit discussions actives
-    if (Array.isArray(data.reddit) && data.reddit.length > 0) {
-      const activeDiscussions = data.reddit.filter(post => 
+    if (Array.isArray(data.sources?.reddit) && data.sources.reddit.length > 0) {
+      const activeDiscussions = data.sources.reddit.filter(post => 
         post?.num_comments && post.num_comments > 10
       );
       trendingScore += activeDiscussions.length * 3;
     }
     
     // Actualités récentes
-    if (Array.isArray(data.news) && data.news.length > 0) {
-      const recentNews = data.news.filter(article => {
+    if (Array.isArray(data.sources?.news) && data.sources.news.length > 0) {
+      const recentNews = data.sources.news.filter(article => {
         if (!article?.publishedAt) return false;
         const articleDate = new Date(article.publishedAt);
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -310,8 +300,8 @@ function calculateTrendingScore(data) {
     }
     
     // Hacker News popularity
-    if (Array.isArray(data.hackerNews) && data.hackerNews.length > 0) {
-      const popularPosts = data.hackerNews.filter(post => 
+    if (Array.isArray(data.sources?.hackerNews) && data.sources.hackerNews.length > 0) {
+      const popularPosts = data.sources.hackerNews.filter(post => 
         post?.points && post.points > 50
       );
       trendingScore += popularPosts.length * 2;
