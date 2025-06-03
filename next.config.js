@@ -34,7 +34,7 @@ const nextConfig = {
   
   // Configuration ESLint corrigée
   eslint: {
-    dirs: ['app', 'lib', 'components'],
+    dirs: ['app', 'lib'],
     ignoreDuringBuilds: false,
   },
   
@@ -45,6 +45,7 @@ const nextConfig = {
   
   // Optimisations de performance
   compress: true,
+  poweredByHeader: false,
   
   // Configuration des redirections si nécessaire
   async redirects() {
@@ -54,6 +55,19 @@ const nextConfig = {
   // Configuration des en-têtes de sécurité
   async headers() {
     return [
+      {
+        source: '/api/(.*)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/json',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+        ],
+      },
       {
         source: '/(.*)',
         headers: [

@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { fetchAllRealData } from '../../../lib/fetchData.js';
-import { analyzeData } from '../../../lib/analyzeData.js';
 
 // Cache en mémoire pour éviter les appels répétés
 const searchCache = new Map();
@@ -40,6 +38,8 @@ export async function GET(request) {
     let data;
     
     try {
+      // Import dynamique pour éviter les problèmes ES6/CommonJS
+      const { fetchAllRealData } = await import('../../../lib/fetchData.js');
       data = await fetchAllRealData(cleanQuery);
     } catch (dataError) {
       console.error('❌ Data collection failed:', dataError.message);
@@ -82,6 +82,9 @@ export async function GET(request) {
     let analysis;
     
     try {
+      // Import dynamique pour l'analyse
+      const { analyzeData } = await import('../../../lib/analyzeData.js');
+      
       // Préparer les données pour l'analyse dans l'ancien format
       const analysisData = {
         news: data.sources?.news || [],
@@ -170,11 +173,11 @@ export async function GET(request) {
   } catch (error) {
     console.error('❌ Search API Critical Error:', error);
     
-    // Retourner une réponse d'erreur structurée
+    // IMPORTANT: Toujours retourner du JSON valide
     return NextResponse.json({
       error: 'Search service temporarily unavailable',
       message: 'Please try again in a few moments',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
       timestamp: new Date().toISOString(),
       status: 'error',
       fallback: {
@@ -243,7 +246,6 @@ ${companiesFound > 0 ? `
 // Calculer le score d'intention global avec validation
 function calculateOverallIntentScore(data) {
   if (!data || typeof data !== 'object') return 0;
-  
   return data.intelligence?.avg_intent_score || 0;
 }
 

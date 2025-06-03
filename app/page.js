@@ -21,16 +21,46 @@ export default function SBGLeadGenApp() {
 
     try {
       const response = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
-      const data = await response.json();
+      
+      // Vérifier si la réponse est bien du JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response. Please try again later.');
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('JSON Parse Error:', jsonError);
+        throw new Error('Invalid response format from server. Please try again.');
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Search failed');
+        throw new Error(data.error || data.message || 'Search failed');
+      }
+
+      // Valider la structure des données
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid data structure received from server');
       }
 
       setResults(data);
     } catch (err) {
-      setError(err.message);
       console.error('Search error:', err);
+      
+      // Messages d'erreur plus informatifs
+      let errorMessage = err.message;
+      
+      if (err.message.includes('Failed to fetch')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (err.message.includes('non-JSON response')) {
+        errorMessage = 'Server configuration error. Please contact support if this persists.';
+      } else if (err.message.includes('Invalid response format')) {
+        errorMessage = 'Data parsing error. The server may be experiencing issues.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
